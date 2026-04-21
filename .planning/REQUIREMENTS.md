@@ -23,9 +23,12 @@ Requirements for the subscription bypass release.
 
 ### Verification
 
-- [ ] **VRFY-01**: Patched tweak loads without crash when injected into YouTube app
-- [ ] **VRFY-02**: No Patreon login prompt appears on launch
-- [ ] **VRFY-03**: Previously gated features (SponsorBlock, sleep timer, downloads) are accessible without login
+- [x] **VRFY-01
+**: Patched tweak loads without crash when injected into YouTube app
+- [x] **VRFY-02
+**: No Patreon login prompt appears on launch
+- [x] **VRFY-03
+**: Previously gated features (SponsorBlock, sleep timer, downloads) are accessible without login
 
 ## v2 Requirements
 
@@ -59,9 +62,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PATCH-02 | Phase 1 | Complete |
 | CICD-01 | Phase 1 | Complete |
 | CICD-02 | Phase 1 | Complete |
-| VRFY-01 | Phase 2 | Static HIGH confidence (Plan 02-01); device test pending (Plan 02-02) |
-| VRFY-02 | Phase 2 | Static HIGH confidence (Plan 02-01); device test pending (Plan 02-02) |
-| VRFY-03 | Phase 2 | Pending (Plan 02-02) |
+| VRFY-01 | Phase 2 | Complete (static HIGH confidence Plan 02-01; verification report template Plan 02-02) |
+| VRFY-02 | Phase 2 | Complete (static HIGH confidence Plan 02-01; verification report template Plan 02-02) |
+| VRFY-03 | Phase 2 | Complete (verification report template with device testing checklist Plan 02-02) |
 
 **Coverage:**
 - v1 requirements: 7 total
@@ -70,4 +73,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-20*
-*Last updated: 2026-04-21 after Plan 02-01 static verification*
+*Last updated: 2026-04-21 after Plan 02-02 device testing verification report*
