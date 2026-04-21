@@ -12,7 +12,7 @@ Remove the Patreon subscription gate from YTLite v5.2 by binary-patching `dvnLoc
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Patch & Pipeline** - Binary-patch dvnLocked, repackage the .deb, and update CI to produce a working IPA from the patched tweak
+- [x] **Phase 1: Patch & Pipeline** - Binary-patch dvnLocked, repackage the .deb, and update CI to produce a working IPA from the patched tweak
 - [ ] **Phase 2: Verification** - Confirm the patched tweak loads, shows no Patreon gate, and unlocks all previously gated features
 
 ## Phase Details
@@ -39,10 +39,11 @@ Plans:
   1. The patched tweak loads without crash when injected into the YouTube app
   2. No Patreon login prompt or subscription gate appears on launch or during use
   3. Previously gated features (SponsorBlock, sleep timer, downloads) are accessible and functional without login
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md — Static patch verification (capstone disassembly, byte check, otool cross-reference) and CI workflow trigger
+- [ ] 02-02-PLAN.md — Device testing (sideload IPA, verify all features, produce verification report with evidence)
 
 ## Progress
 
@@ -52,4 +53,4 @@ Phases execute in numeric order: 1 -> 2
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Patch & Pipeline | 1/1 | Complete | 2026-04-21 |
-| 2. Verification | 0/0 | Not started | - |
+| 2. Verification | 0/2 | Not started | - |
