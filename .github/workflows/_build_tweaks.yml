@@ -102,6 +102,58 @@ jobs:
             exit 1
           fi
 
+      - name: Patch YTLite dylib (bypass dvnLocked)
+        if: ${{ inputs.tweak_version != '' || inputs.tweak_url != '' }}
+        run: |
+          set -euo pipefail
+
+          # --- D-07: SHA256 verification of upstream .deb ---
+          EXPECTED_SHA256="cc48b87d76605b26e75414e2bc3d678b5f32f3c7bc57710754f29dc33b2fff9b"
+          ACTUAL_SHA256=$(shasum -a 256 ytplus.deb | cut -d' ' -f1)
+          echo "Downloaded .deb SHA256: $ACTUAL_SHA256"
+          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "::error::SHA256 mismatch! Expected: $EXPECTED_SHA256, Got: $ACTUAL_SHA256"
+            exit 1
+          fi
+          echo "SHA256 verified OK"
+
+          # --- D-01: Extract .deb ---
+          PATCH_DIR=$(mktemp -d)
+          dpkg-deb -R ytplus.deb "$PATCH_DIR"
+          DYLIB="$PATCH_DIR/Library/MobileSubstrate/DynamicLibraries/YTLite.dylib"
+
+          if [ ! -f "$DYLIB" ]; then
+            echo "::error::YTLite.dylib not found in extracted .deb"
+            exit 1
+          fi
+
+          # --- D-06: Log before-patch bytes ---
+          OFFSET=$((0x1eb64))
+          echo "=== BEFORE patch (8 bytes at offset 0x1eb64) ==="
+          xxd -s $OFFSET -l 8 "$DYLIB"
+
+          # --- D-02: Apply binary patch ---
+          # MOV W0, #0 (0x52800000) + RET (0xD65F03C0), little-endian
+          printf '\x00\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET conv=notrunc 2>/dev/null
+
+          # --- D-06: Log after-patch bytes ---
+          echo "=== AFTER patch (8 bytes at offset 0x1eb64) ==="
+          xxd -s $OFFSET -l 8 "$DYLIB"
+
+          # --- D-05: Verify patch bytes ---
+          ACTUAL=$(xxd -s $OFFSET -l 8 -p "$DYLIB")
+          EXPECTED="00008052c0035fd6"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Patch verification FAILED! Expected: $EXPECTED, Got: $ACTUAL"
+            exit 1
+          fi
+          echo "Patch verified OK: dvnLocked now returns 0 (unlocked)"
+
+          # --- D-01: Repackage .deb ---
+          dpkg-deb -b "$PATCH_DIR" ytplus.deb
+          rm -rf "$PATCH_DIR"
+          echo "Repackaged ytplus.deb with patched dylib"
+
       - name: Clone YouTubeHeader
         if: ${{ inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_ytabc || inputs.enable_demc }}
         run: |
