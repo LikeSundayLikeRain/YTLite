@@ -406,17 +406,19 @@ All values below were obtained by downloading and extracting the actual v5.2 .de
 | A2 | `dpkg-deb -b` preserves the original compression format (lzma) when repacking | Common Pitfalls | MEDIUM -- if it switches to a different compression, the .deb may still be valid but different from original. `cyan` injection should still work regardless of compression format |
 | A3 | SHA256 check should be conditional on version or unconditional | Pitfall 6 | LOW -- D-07 says hard-code for v5.2; future versions are out of scope per REQUIREMENTS.md |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **SHA256 check scope for non-5.2 versions**
    - What we know: D-07 says hard-code the hash for v5.2. The `tweak_version` input allows other versions.
    - What's unclear: Should the patch step skip entirely for non-5.2 versions, or just skip the SHA256 check?
    - Recommendation: Make SHA256 check conditional on `tweak_version == "5.2"`. For other versions, the offset may be wrong anyway, so skipping the entire patch is safer. But since upstream sync is out of scope, this is academic -- the input will always be 5.2.
+   - RESOLVED: SHA256 check is unconditional per D-07; future versions are out of scope per REQUIREMENTS.md Out of Scope ("Upstream sync — no plan to track them"). The tweak_version input defaults to "5.2" and the guard condition on the patch step ensures it only runs when a .deb was downloaded.
 
 2. **dvnCheck at 0x1eb78**
    - What we know: dvnCheck calls an auth function and returns true/false based on Patreon status. It is explicitly out of scope per REQUIREMENTS.md.
    - What's unclear: Whether bypassing dvnLocked alone is sufficient to unlock all features (verified in Phase 2).
    - Recommendation: Proceed with dvnLocked-only patch. Phase 2 verification will confirm if dvnCheck also needs patching.
+   - RESOLVED: dvnCheck patching is explicitly out of scope per REQUIREMENTS.md ("dvnCheck patching — dvnLocked is the gate; dvnCheck may not need patching if dvnLocked bypass is sufficient"). Phase 2 verification (VRFY-03) will determine if further patching is needed.
 
 ## CI Workflow Integration Details
 
