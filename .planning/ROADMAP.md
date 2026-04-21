@@ -42,7 +42,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Static patch verification (capstone disassembly, byte check, otool cross-reference) and CI workflow trigger
+- [x] 02-01-PLAN.md — Static patch verification (capstone disassembly, byte check, otool cross-reference) and CI workflow trigger
 - [ ] 02-02-PLAN.md — Device testing (sideload IPA, verify all features, produce verification report with evidence)
 
 ## Progress
@@ -53,4 +53,4 @@ Phases execute in numeric order: 1 -> 2
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Patch & Pipeline | 1/1 | Complete | 2026-04-21 |
-| 2. Verification | 0/2 | Not started | - |
+| 2. Verification | 1/2 | In progress | - |

@@ -55,13 +55,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PATCH-01 | Phase 1 | Pending |
-| PATCH-02 | Phase 1 | Pending |
-| CICD-01 | Phase 1 | Pending |
-| CICD-02 | Phase 1 | Pending |
-| VRFY-01 | Phase 2 | Pending |
-| VRFY-02 | Phase 2 | Pending |
-| VRFY-03 | Phase 2 | Pending |
+| PATCH-01 | Phase 1 | Complete |
+| PATCH-02 | Phase 1 | Complete |
+| CICD-01 | Phase 1 | Complete |
+| CICD-02 | Phase 1 | Complete |
+| VRFY-01 | Phase 2 | Static HIGH confidence (Plan 02-01); device test pending (Plan 02-02) |
+| VRFY-02 | Phase 2 | Static HIGH confidence (Plan 02-01); device test pending (Plan 02-02) |
+| VRFY-03 | Phase 2 | Pending (Plan 02-02) |
 
 **Coverage:**
 - v1 requirements: 7 total
@@ -70,4 +70,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-20*
-*Last updated: 2026-04-20 after roadmap creation*
+*Last updated: 2026-04-21 after Plan 02-01 static verification*

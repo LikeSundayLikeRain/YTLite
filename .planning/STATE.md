@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v5.2
 milestone_name: milestone
-status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-04-21T04:03:30.350Z"
-last_activity: 2026-04-21
+status: executing
+stopped_at: Completed 02-01 static verification
+last_updated: "2026-04-21T04:08:44Z"
+last_activity: 2026-04-21 -- Plan 02-01 static verification complete
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 3
-  completed_plans: 1
-  percent: 33
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -21,36 +21,36 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-20)
 
 **Core value:** All tweak features work without any Patreon login or subscription check
-**Current focus:** Phase 01 — Patch & Pipeline
+**Current focus:** Phase 2 — Verification
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-04-21
+Phase: 02-verification — EXECUTING
+Plan: 2 of 2
+Status: Plan 02-01 complete, Plan 02-02 next
+Last activity: 2026-04-21 -- Plan 02-01 static verification complete
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
 
 - Total plans completed: 2
-- Average duration: 2min
-- Total execution time: 0.03 hours
+- Average duration: 3min
+- Total execution time: 0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-patch-pipeline | 1 | 2min | 2min |
-| 01 | 1 | - | - |
+| 02-verification | 1 | 4min | 4min |
 
 **Recent Trend:**
 
-- Last 5 plans: 01-01 (2min)
-- Trend: First plan
+- Last 5 plans: 01-01 (2min), 02-01 (4min)
+- Trend: Stable
 
 *Updated after each plan completion*
 
@@ -66,6 +66,9 @@ Recent decisions affecting current work:
 - Coarse granularity: 2 phases (Patch & Pipeline, Verification)
 - Used printf+dd for binary write -- most readable and consistent with existing workflow shell style
 - SHA256 check unconditional per D-07; future versions out of scope
+- Used ar+tar for .deb extraction in verify_patch.py (dpkg-deb unavailable on macOS)
+- Static analysis confirms HIGH confidence for VRFY-01 (no crash) and VRFY-02 (no Patreon gate)
+- CI workflow requires user-provided decrypted IPA URL to trigger build
 
 ### Pending Todos
 
@@ -86,8 +89,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: --stopped-at
-Stopped at: Phase 2 context gathered
-Resume file: --resume-file
+Last session: 2026-04-21T04:08:44Z
+Stopped at: Completed 02-01 static verification
+Resume file: .planning/phases/02-verification/02-02-PLAN.md
 
-**Planned Phase:** 2 (Verification) — 2 plans — 2026-04-21T04:03:30.345Z
+**Current Phase:** 2 (Verification) — 1/2 plans complete — Plan 02-02 (device testing) next
