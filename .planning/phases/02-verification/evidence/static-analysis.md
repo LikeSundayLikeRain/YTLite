@@ -83,3 +83,14 @@ otool confirms:
 ## VRFY-02 Static Confidence
 - dvnLocked unconditionally returns 0: PASS
 - **Conclusion:** HIGH confidence that no Patreon prompt will appear
+
+## CI Artifact Status
+
+- **Workflow runs:** None found
+- **IPA artifact:** Not yet produced
+- **Blocker:** The `main.yml` workflow requires a `ipa_url` input (URL to a decrypted YouTube IPA). This must be provided by the user to trigger the build.
+- **Next step:** User must trigger workflow dispatch via GitHub Actions UI or CLI:
+  ```bash
+  gh workflow run main.yml -f ipa_url="<DECRYPTED_IPA_URL>" -f tweak_version="5.2"
+  ```
+- **After CI completes:** Download the IPA from the draft GitHub Release for sideloading in Plan 02.
