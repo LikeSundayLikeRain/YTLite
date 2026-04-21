@@ -25,13 +25,14 @@ All tweak features work without any Patreon login or subscription check — the 
 
 ### Active
 
-- [ ] Bypass Patreon subscription check so all features return "subscribed"
-- [ ] Set up theos build environment to compile the tweak
-- [ ] Verify all features work without Patreon login after bypass
+- [ ] Patch `dvnLocked` function in the pre-compiled v5.2 dylib to always return 0 (unlocked)
+- [ ] Update CI pipeline to use patched binary instead of downloading upstream gated one
+- [ ] Verify all features (including premium: SponsorBlock, sleep timer, etc.) work without Patreon login
 
 ### Out of Scope
 
 - Full removal of Patreon code — bypass is sufficient, minimal changes preferred
+- Building from source — source is missing ~10 premium features; binary patch preserves all v5.2 features
 - New feature development — this is a subscription removal fork, not a feature fork
 - Upstream sync — no plan to merge future upstream changes (they'll have the paywall)
 
@@ -40,21 +41,25 @@ All tweak features work without any Patreon login or subscription check — the 
 - YTLite is an Objective-C++ tweak using the Logos preprocessor (`%hook`, `%group`, `%ctor`)
 - Injects into YouTube iOS app via MobileSubstrate/Substitute as a dynamic library
 - All features are gated behind `YTLUserDefaults` boolean/integer keys
-- The Patreon gate likely checks subscription status and conditionally enables/disables feature flags
-- Build system uses theos Makefile
+- The Patreon gate is in the pre-compiled binary only, NOT in this repo's source code
+- `dvnLocked` at offset `0x1eb64` reads a subscription byte and returns 1 (locked) or 0 (unlocked) — 4 instructions
+- `dvnCheck` at offset `0x1eb78` calls an auth function and returns true/false based on Patreon status
+- The CI downloads pre-built `.deb` from `dayanch96/YTLite/releases` — it does NOT compile from source
+- Build system uses theos Makefile, but the open-source code is an older version (~v3.0.1) missing premium features
 - v5.2 is the latest release that introduced the subscription requirement
 
 ## Constraints
 
-- **Minimal changes**: Bypass only — don't refactor or remove Patreon infrastructure
-- **Build toolchain**: Requires theos SDK for iOS tweak compilation
-- **No testing on device yet**: Build environment needs to be set up first
+- **Minimal changes**: 4-byte binary patch of `dvnLocked` — don't touch anything else
+- **Binary target**: `YTLite.dylib` from the v5.2 `.deb` at `Library/MobileSubstrate/DynamicLibraries/`
+- **No testing on device yet**: Need iOS device or sideloading setup to verify
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Bypass approach over full removal | Minimal code changes, less risk of breaking things, easier to maintain | -- Pending |
+| Binary patch over full removal | 4-byte change vs. ripping out Patreon code — minimal risk | -- Pending |
+| Patch binary over build from source | Source is missing ~10 premium features (SponsorBlock, sleep timer, etc.); patching preserves all v5.2 features | -- Pending |
 | Fork at v5.2 | Last version before subscription was enforced is the baseline | -- Pending |
 
 ## Evolution

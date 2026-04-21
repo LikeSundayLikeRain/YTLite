@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Insert patch step into _build_tweaks.yml (SHA256 verify, extract, patch dvnLocked, verify bytes, repackage .deb)
+- [x] 01-01-PLAN.md — Insert patch step into _build_tweaks.yml (SHA256 verify, extract, patch dvnLocked, verify bytes, repackage .deb)
 
 ### Phase 2: Verification
 **Goal**: Users can install the patched IPA and use all YTLite features -- including previously gated ones -- without any Patreon login or subscription prompt
@@ -51,5 +51,5 @@ Phases execute in numeric order: 1 -> 2
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Patch & Pipeline | 0/1 | Not started | - |
+| 1. Patch & Pipeline | 1/1 | Complete | 2026-04-21 |
 | 2. Verification | 0/0 | Not started | - |
