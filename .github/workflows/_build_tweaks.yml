@@ -149,31 +149,34 @@ jobs:
           fi
           echo "Patch verified OK: dvnLocked now returns 0 (unlocked)"
 
-          # --- Patch dvnCheck to always return 1 (authenticated) ---
-          OFFSET2=$((0x1eb78))
-          echo "=== BEFORE patch (8 bytes at offset 0x1eb78 - dvnCheck) ==="
-          xxd -s $OFFSET2 -l 8 "$DYLIB"
+          # --- Patch dvnCheck to always return 1, while keeping auth side effects ---
+          # dvnCheck calls bl 0x2cc54 which triggers feature flag decoding.
+          # Our old patch (MOV W0,#1 + RET at function entry) skipped that call entirely.
+          # Instead, patch only the "cset w19, ne" at 0x1eb94 to "mov w19, #1"
+          # so the auth call runs (decoding flags) but the return is always 1.
+          OFFSET2=$((0x1eb94))
+          echo "=== BEFORE patch (4 bytes at offset 0x1eb94 - cset w19) ==="
+          xxd -s $OFFSET2 -l 4 "$DYLIB"
 
-          # MOV W0, #1 (0x52800020) + RET (0xD65F03C0), little-endian
-          printf '\x20\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
+          # MOV W19, #1 = 0x52800033 (little-endian: 33008052)
+          printf '\x33\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
 
-          echo "=== AFTER patch (8 bytes at offset 0x1eb78 - dvnCheck) ==="
-          xxd -s $OFFSET2 -l 8 "$DYLIB"
+          echo "=== AFTER patch (4 bytes at offset 0x1eb94 - mov w19, #1) ==="
+          xxd -s $OFFSET2 -l 4 "$DYLIB"
 
-          ACTUAL2=$(xxd -s $OFFSET2 -l 8 -p "$DYLIB")
-          EXPECTED2="20008052c0035fd6"
+          ACTUAL2=$(xxd -s $OFFSET2 -l 4 -p "$DYLIB")
+          EXPECTED2="33008052"
           if [ "$ACTUAL2" != "$EXPECTED2" ]; then
-            echo "::error::dvnCheck patch verification FAILED! Expected: $EXPECTED2, Got: $ACTUAL2"
+            echo "::error::dvnCheck cset patch FAILED! Expected: $EXPECTED2, Got: $ACTUAL2"
             exit 1
           fi
-          echo "Patch verified OK: dvnCheck now returns 1 (authenticated)"
+          echo "Patch verified OK: dvnCheck always returns 1 (auth call preserved for flag decoding)"
 
           # --- Redirect lock path to unlock path ---
-          # The Patreon validation switch has two outcomes:
-          #   Lock path at 0x26ff4: sets locked byte to 0, skips feature flag decoding
-          #   Unlock path at 0x274b0: sets locked byte to 1, decodes all feature flags
-          # Replace the first instruction of the lock path with B 0x274b0
-          # so failed validation runs the unlock code instead.
+          # The Patreon validation switch at 0x26ff0 has two outcomes:
+          #   Lock path at 0x26ff4: sets locked byte to 0, skips feature flag init
+          #   Unlock path at 0x274b0: sets locked byte to 1, initializes features
+          # Replace the lock path entry with B 0x274b0 so both outcomes unlock.
           OFFSET3=$((0x26ff4))
           echo "=== BEFORE patch (4 bytes at offset 0x26ff4 - lock path entry) ==="
           xxd -s $OFFSET3 -l 4 "$DYLIB"
