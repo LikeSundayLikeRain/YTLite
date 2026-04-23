@@ -101,6 +101,28 @@ jobs:
             exit 1
           fi
 
+      - name: NOP runtime lock in YTLite dylib
+        if: ${{ inputs.tweak_version != '' || inputs.tweak_url != '' }}
+        run: |
+          set -euo pipefail
+          PATCH_DIR=$(mktemp -d)
+          dpkg-deb -R ytplus.deb "$PATCH_DIR"
+          DYLIB="$PATCH_DIR/Library/MobileSubstrate/DynamicLibraries/YTLite.dylib"
+
+          # NOP the strb wzr,[x8,#0x4e1] at 0x26ff8 that locks features at runtime
+          OFFSET=$((0x26ff8))
+          echo "=== BEFORE (0x26ff8) ==="
+          xxd -s $OFFSET -l 4 "$DYLIB"
+          printf '\x1f\x20\x03\xd5' | dd of="$DYLIB" bs=1 seek=$OFFSET conv=notrunc 2>/dev/null
+          echo "=== AFTER (0x26ff8) ==="
+          xxd -s $OFFSET -l 4 "$DYLIB"
+          ACTUAL=$(xxd -s $OFFSET -l 4 -p "$DYLIB")
+          if [ "$ACTUAL" != "1f2003d5" ]; then echo "::error::NOP FAILED!"; exit 1; fi
+          echo "NOP OK"
+
+          dpkg-deb -b "$PATCH_DIR" ytplus.deb
+          rm -rf "$PATCH_DIR"
+
       - name: Build YTLite Bypass tweak
         if: ${{ inputs.tweak_version != '' || inputs.tweak_url != '' }}
         run: |
