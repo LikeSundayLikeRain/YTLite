@@ -168,28 +168,29 @@ jobs:
           fi
           echo "Patch verified OK: dvnCheck now returns 1 (authenticated)"
 
-          # --- NOP the runtime lock instruction at 0x26ff8 ---
-          # At 0x26ff8: "strb wzr, [x8, #0x4e1]" sets the locked byte to 0,
-          # which LOCKS features (bic logic: byte=0 -> locked).
-          # This runs when Patreon validation fails at startup.
-          # NOP it so the byte stays at its default value of 1 (unlocked).
-          OFFSET3=$((0x26ff8))
-          echo "=== BEFORE patch (4 bytes at offset 0x26ff8 - runtime lock) ==="
+          # --- Redirect lock path to unlock path ---
+          # The Patreon validation switch has two outcomes:
+          #   Lock path at 0x26ff4: sets locked byte to 0, skips feature flag decoding
+          #   Unlock path at 0x274b0: sets locked byte to 1, decodes all feature flags
+          # Replace the first instruction of the lock path with B 0x274b0
+          # so failed validation runs the unlock code instead.
+          OFFSET3=$((0x26ff4))
+          echo "=== BEFORE patch (4 bytes at offset 0x26ff4 - lock path entry) ==="
           xxd -s $OFFSET3 -l 4 "$DYLIB"
 
-          # ARM64 NOP = 0xD503201F
-          printf '\x1f\x20\x03\xd5' | dd of="$DYLIB" bs=1 seek=$OFFSET3 conv=notrunc 2>/dev/null
+          # B 0x274b0 = 0x1400012F (little-endian: 2f010014)
+          printf '\x2f\x01\x00\x14' | dd of="$DYLIB" bs=1 seek=$OFFSET3 conv=notrunc 2>/dev/null
 
-          echo "=== AFTER patch (4 bytes at offset 0x26ff8 - runtime lock) ==="
+          echo "=== AFTER patch (4 bytes at offset 0x26ff4 - lock path entry) ==="
           xxd -s $OFFSET3 -l 4 "$DYLIB"
 
           ACTUAL3=$(xxd -s $OFFSET3 -l 4 -p "$DYLIB")
-          EXPECTED3="1f2003d5"
+          EXPECTED3="2f010014"
           if [ "$ACTUAL3" != "$EXPECTED3" ]; then
-            echo "::error::NOP patch FAILED! Expected: $EXPECTED3, Got: $ACTUAL3"
+            echo "::error::Branch patch FAILED! Expected: $EXPECTED3, Got: $ACTUAL3"
             exit 1
           fi
-          echo "Patch verified OK: runtime lock instruction NOPed (features stay unlocked)"
+          echo "Patch verified OK: lock path redirected to unlock path"
 
           # --- D-01: Repackage .deb ---
           dpkg-deb -b "$PATCH_DIR" ytplus.deb
