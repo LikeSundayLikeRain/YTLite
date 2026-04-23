@@ -168,6 +168,25 @@ jobs:
           fi
           echo "Patch verified OK: dvnCheck now returns 1 (authenticated)"
 
+          # --- Patch the global locked byte from 1 to 0 ---
+          # dvnLocked reads a byte at virtual address 0x11524e1 (file offset 0x11524e1)
+          # 184 places in the binary read this byte directly instead of calling dvnLocked
+          OFFSET3=$((0x11524e1))
+          echo "=== BEFORE patch (1 byte at offset 0x11524e1 - locked flag) ==="
+          xxd -s $OFFSET3 -l 1 "$DYLIB"
+
+          printf '\x00' | dd of="$DYLIB" bs=1 seek=$OFFSET3 conv=notrunc 2>/dev/null
+
+          echo "=== AFTER patch (1 byte at offset 0x11524e1 - locked flag) ==="
+          xxd -s $OFFSET3 -l 1 "$DYLIB"
+
+          ACTUAL3=$(xxd -s $OFFSET3 -l 1 -p "$DYLIB")
+          if [ "$ACTUAL3" != "00" ]; then
+            echo "::error::Locked byte patch FAILED! Expected: 00, Got: $ACTUAL3"
+            exit 1
+          fi
+          echo "Patch verified OK: locked byte set to 0 (unlocked for all 184 inline reads)"
+
           # --- D-01: Repackage .deb ---
           dpkg-deb -b "$PATCH_DIR" ytplus.deb
           rm -rf "$PATCH_DIR"
