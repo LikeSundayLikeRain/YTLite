@@ -151,6 +151,85 @@ jobs:
           fi
           echo "Patch verified OK: ptnRegisterBlock now unconditionally invokes all hook blocks"
 
+          # --- Patch dvnLocked to always return 0 (unlocked) ---
+          # Hook implementations check this at runtime via the lock byte.
+          OFFSET2=$((0x1eb64))
+          echo "=== BEFORE patch (8 bytes at offset 0x1eb64 - dvnLocked) ==="
+          xxd -s $OFFSET2 -l 8 "$DYLIB"
+
+          # MOV W0, #0 + RET
+          printf '\x00\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
+
+          echo "=== AFTER patch (8 bytes at offset 0x1eb64 - dvnLocked) ==="
+          xxd -s $OFFSET2 -l 8 "$DYLIB"
+
+          ACTUAL2=$(xxd -s $OFFSET2 -l 8 -p "$DYLIB")
+          if [ "$ACTUAL2" != "00008052c0035fd6" ]; then
+            echo "::error::dvnLocked patch FAILED!"
+            exit 1
+          fi
+          echo "Patch verified OK: dvnLocked returns 0 (unlocked)"
+
+          # --- NOP the runtime lock instruction ---
+          # At 0x26ff8: "strb wzr, [x8, #0x4e1]" sets the lock byte to 0 (locked)
+          # when Patreon validation fails. NOP it so the byte stays 1 (unlocked).
+          OFFSET3=$((0x26ff8))
+          echo "=== BEFORE patch (4 bytes at offset 0x26ff8 - runtime lock) ==="
+          xxd -s $OFFSET3 -l 4 "$DYLIB"
+
+          # ARM64 NOP
+          printf '\x1f\x20\x03\xd5' | dd of="$DYLIB" bs=1 seek=$OFFSET3 conv=notrunc 2>/dev/null
+
+          echo "=== AFTER patch (4 bytes at offset 0x26ff8 - runtime lock) ==="
+          xxd -s $OFFSET3 -l 4 "$DYLIB"
+
+          ACTUAL3=$(xxd -s $OFFSET3 -l 4 -p "$DYLIB")
+          if [ "$ACTUAL3" != "1f2003d5" ]; then
+            echo "::error::NOP patch FAILED!"
+            exit 1
+          fi
+          echo "Patch verified OK: runtime lock instruction NOPed"
+
+          # --- Patch dvnCheck to always return 1 (authenticated) ---
+          # Preserves the auth call (bl 0x2cc54) which has init side effects,
+          # but forces return value to 1 by replacing cset w19,ne with mov w19,#1.
+          OFFSET4=$((0x1eb94))
+          echo "=== BEFORE patch (4 bytes at offset 0x1eb94 - dvnCheck cset) ==="
+          xxd -s $OFFSET4 -l 4 "$DYLIB"
+
+          # MOV W19, #1
+          printf '\x33\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET4 conv=notrunc 2>/dev/null
+
+          echo "=== AFTER patch (4 bytes at offset 0x1eb94 - dvnCheck cset) ==="
+          xxd -s $OFFSET4 -l 4 "$DYLIB"
+
+          ACTUAL4=$(xxd -s $OFFSET4 -l 4 -p "$DYLIB")
+          if [ "$ACTUAL4" != "33008052" ]; then
+            echo "::error::dvnCheck patch FAILED!"
+            exit 1
+          fi
+          echo "Patch verified OK: dvnCheck always returns 1"
+
+          # --- Redirect lock path to unlock path ---
+          # The switch at 0x26ff0 has lock path at 0x26ff4 and unlock at 0x274b0.
+          # Force lock path to jump to unlock path.
+          OFFSET5=$((0x26ff4))
+          echo "=== BEFORE patch (4 bytes at offset 0x26ff4 - lock path) ==="
+          xxd -s $OFFSET5 -l 4 "$DYLIB"
+
+          # B 0x274b0
+          printf '\x2f\x01\x00\x14' | dd of="$DYLIB" bs=1 seek=$OFFSET5 conv=notrunc 2>/dev/null
+
+          echo "=== AFTER patch (4 bytes at offset 0x26ff4 - lock path) ==="
+          xxd -s $OFFSET5 -l 4 "$DYLIB"
+
+          ACTUAL5=$(xxd -s $OFFSET5 -l 4 -p "$DYLIB")
+          if [ "$ACTUAL5" != "2f010014" ]; then
+            echo "::error::Lock path redirect FAILED!"
+            exit 1
+          fi
+          echo "Patch verified OK: lock path redirected to unlock path"
+
           # --- Repackage .deb ---
           dpkg-deb -b "$PATCH_DIR" ytplus.deb
           rm -rf "$PATCH_DIR"
