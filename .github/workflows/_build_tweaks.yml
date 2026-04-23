@@ -102,12 +102,12 @@ jobs:
             exit 1
           fi
 
-      - name: Patch YTLite dylib (bypass dvnLocked + dvnCheck)
+      - name: Patch YTLite dylib (bypass Patreon gate)
         if: ${{ inputs.tweak_version != '' || inputs.tweak_url != '' }}
         run: |
           set -euo pipefail
 
-          # --- D-07: SHA256 verification of upstream .deb ---
+          # --- SHA256 verification of upstream .deb ---
           EXPECTED_SHA256="cc48b87d76605b26e75414e2bc3d678b5f32f3c7bc57710754f29dc33b2fff9b"
           ACTUAL_SHA256=$(shasum -a 256 ytplus.deb | cut -d' ' -f1)
           echo "Downloaded .deb SHA256: $ACTUAL_SHA256"
@@ -117,7 +117,7 @@ jobs:
           fi
           echo "SHA256 verified OK"
 
-          # --- D-01: Extract .deb ---
+          # --- Extract .deb ---
           PATCH_DIR=$(mktemp -d)
           dpkg-deb -R ytplus.deb "$PATCH_DIR"
           DYLIB="$PATCH_DIR/Library/MobileSubstrate/DynamicLibraries/YTLite.dylib"
@@ -127,75 +127,31 @@ jobs:
             exit 1
           fi
 
-          # --- D-06: Log before-patch bytes ---
-          OFFSET=$((0x1eb64))
-          echo "=== BEFORE patch (8 bytes at offset 0x1eb64) ==="
+          # --- Bypass ptnRegisterBlock (the Patreon hook gate) ---
+          # All 355 method hooks are registered through ptnRegisterBlock at 0x1e878.
+          # It receives an ObjC block in x0 and conditionally executes it based on
+          # Patreon subscription status. Replace it with a 2-instruction pass-through
+          # that unconditionally invokes the block:
+          #   ldr x8, [x0, #0x10]   ; load block's invoke function pointer
+          #   br  x8                 ; tail-call it (x0 = block = first arg)
+          OFFSET=$((0x1e878))
+          echo "=== BEFORE patch (8 bytes at offset 0x1e878 - ptnRegisterBlock) ==="
           xxd -s $OFFSET -l 8 "$DYLIB"
 
-          # --- D-02: Apply binary patch ---
-          # MOV W0, #0 (0x52800000) + RET (0xD65F03C0), little-endian
-          printf '\x00\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET conv=notrunc 2>/dev/null
+          printf '\x08\x08\x40\xf9\x00\x01\x1f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET conv=notrunc 2>/dev/null
 
-          # --- D-06: Log after-patch bytes ---
-          echo "=== AFTER patch (8 bytes at offset 0x1eb64) ==="
+          echo "=== AFTER patch (8 bytes at offset 0x1e878 - ptnRegisterBlock) ==="
           xxd -s $OFFSET -l 8 "$DYLIB"
 
-          # --- D-05: Verify patch bytes ---
           ACTUAL=$(xxd -s $OFFSET -l 8 -p "$DYLIB")
-          EXPECTED="00008052c0035fd6"
+          EXPECTED="080840f900011fd6"
           if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::Patch verification FAILED! Expected: $EXPECTED, Got: $ACTUAL"
+            echo "::error::ptnRegisterBlock patch FAILED! Expected: $EXPECTED, Got: $ACTUAL"
             exit 1
           fi
-          echo "Patch verified OK: dvnLocked now returns 0 (unlocked)"
+          echo "Patch verified OK: ptnRegisterBlock now unconditionally invokes all hook blocks"
 
-          # --- Patch dvnCheck to always return 1, while keeping auth side effects ---
-          # dvnCheck calls bl 0x2cc54 which triggers feature flag decoding.
-          # Our old patch (MOV W0,#1 + RET at function entry) skipped that call entirely.
-          # Instead, patch only the "cset w19, ne" at 0x1eb94 to "mov w19, #1"
-          # so the auth call runs (decoding flags) but the return is always 1.
-          OFFSET2=$((0x1eb94))
-          echo "=== BEFORE patch (4 bytes at offset 0x1eb94 - cset w19) ==="
-          xxd -s $OFFSET2 -l 4 "$DYLIB"
-
-          # MOV W19, #1 = 0x52800033 (little-endian: 33008052)
-          printf '\x33\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
-
-          echo "=== AFTER patch (4 bytes at offset 0x1eb94 - mov w19, #1) ==="
-          xxd -s $OFFSET2 -l 4 "$DYLIB"
-
-          ACTUAL2=$(xxd -s $OFFSET2 -l 4 -p "$DYLIB")
-          EXPECTED2="33008052"
-          if [ "$ACTUAL2" != "$EXPECTED2" ]; then
-            echo "::error::dvnCheck cset patch FAILED! Expected: $EXPECTED2, Got: $ACTUAL2"
-            exit 1
-          fi
-          echo "Patch verified OK: dvnCheck always returns 1 (auth call preserved for flag decoding)"
-
-          # --- Redirect lock path to unlock path ---
-          # The Patreon validation switch at 0x26ff0 has two outcomes:
-          #   Lock path at 0x26ff4: sets locked byte to 0, skips feature flag init
-          #   Unlock path at 0x274b0: sets locked byte to 1, initializes features
-          # Replace the lock path entry with B 0x274b0 so both outcomes unlock.
-          OFFSET3=$((0x26ff4))
-          echo "=== BEFORE patch (4 bytes at offset 0x26ff4 - lock path entry) ==="
-          xxd -s $OFFSET3 -l 4 "$DYLIB"
-
-          # B 0x274b0 = 0x1400012F (little-endian: 2f010014)
-          printf '\x2f\x01\x00\x14' | dd of="$DYLIB" bs=1 seek=$OFFSET3 conv=notrunc 2>/dev/null
-
-          echo "=== AFTER patch (4 bytes at offset 0x26ff4 - lock path entry) ==="
-          xxd -s $OFFSET3 -l 4 "$DYLIB"
-
-          ACTUAL3=$(xxd -s $OFFSET3 -l 4 -p "$DYLIB")
-          EXPECTED3="2f010014"
-          if [ "$ACTUAL3" != "$EXPECTED3" ]; then
-            echo "::error::Branch patch FAILED! Expected: $EXPECTED3, Got: $ACTUAL3"
-            exit 1
-          fi
-          echo "Patch verified OK: lock path redirected to unlock path"
-
-          # --- D-01: Repackage .deb ---
+          # --- Repackage .deb ---
           dpkg-deb -b "$PATCH_DIR" ytplus.deb
           rm -rf "$PATCH_DIR"
           echo "Repackaged ytplus.deb with patched dylib"
