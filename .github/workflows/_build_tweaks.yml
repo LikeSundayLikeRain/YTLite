@@ -102,7 +102,7 @@ jobs:
             exit 1
           fi
 
-      - name: Patch YTLite dylib (bypass dvnLocked)
+      - name: Patch YTLite dylib (bypass dvnLocked + dvnCheck)
         if: ${{ inputs.tweak_version != '' || inputs.tweak_url != '' }}
         run: |
           set -euo pipefail
@@ -148,6 +148,25 @@ jobs:
             exit 1
           fi
           echo "Patch verified OK: dvnLocked now returns 0 (unlocked)"
+
+          # --- Patch dvnCheck to always return 1 (authenticated) ---
+          OFFSET2=$((0x1eb78))
+          echo "=== BEFORE patch (8 bytes at offset 0x1eb78 - dvnCheck) ==="
+          xxd -s $OFFSET2 -l 8 "$DYLIB"
+
+          # MOV W0, #1 (0x52800020) + RET (0xD65F03C0), little-endian
+          printf '\x20\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
+
+          echo "=== AFTER patch (8 bytes at offset 0x1eb78 - dvnCheck) ==="
+          xxd -s $OFFSET2 -l 8 "$DYLIB"
+
+          ACTUAL2=$(xxd -s $OFFSET2 -l 8 -p "$DYLIB")
+          EXPECTED2="20008052c0035fd6"
+          if [ "$ACTUAL2" != "$EXPECTED2" ]; then
+            echo "::error::dvnCheck patch verification FAILED! Expected: $EXPECTED2, Got: $ACTUAL2"
+            exit 1
+          fi
+          echo "Patch verified OK: dvnCheck now returns 1 (authenticated)"
 
           # --- D-01: Repackage .deb ---
           dpkg-deb -b "$PATCH_DIR" ytplus.deb
