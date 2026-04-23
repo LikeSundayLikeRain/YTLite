@@ -58,7 +58,6 @@ jobs:
           echo "THEOS=${{ github.workspace }}/theos" >> $GITHUB_ENV
 
       - name: Cache Theos
-        if: ${{ inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_ytabc || inputs.enable_demc }}
         id: theos
         uses: actions/cache@v5
         env:
@@ -69,7 +68,7 @@ jobs:
           restore-keys: ${{ env.cache-name }}
 
       - name: Setup Theos
-        if: ${{ (inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_ytabc || inputs.enable_demc) && steps.theos.outputs.cache-hit != 'true' }}
+        if: ${{ steps.theos.outputs.cache-hit != 'true' }}
         uses: actions/checkout@v6
         with:
           repository: theos/theos
@@ -78,7 +77,7 @@ jobs:
           submodules: recursive
 
       - name: Download iOS SDK
-        if: ${{ (inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_ytabc || inputs.enable_demc) && steps.theos.outputs.cache-hit != 'true' }}
+        if: ${{ steps.theos.outputs.cache-hit != 'true' }}
         run: |
           git clone --quiet -n --depth=1 --filter=tree:0 https://github.com/theos/sdks/
           cd sdks
@@ -102,118 +101,15 @@ jobs:
             exit 1
           fi
 
-      - name: Patch YTLite dylib (bypass Patreon gate)
+      - name: Build YTLite Bypass tweak
         if: ${{ inputs.tweak_version != '' || inputs.tweak_url != '' }}
         run: |
-          set -euo pipefail
-
-          # --- SHA256 verification of upstream .deb ---
-          EXPECTED_SHA256="cc48b87d76605b26e75414e2bc3d678b5f32f3c7bc57710754f29dc33b2fff9b"
-          ACTUAL_SHA256=$(shasum -a 256 ytplus.deb | cut -d' ' -f1)
-          echo "Downloaded .deb SHA256: $ACTUAL_SHA256"
-          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
-            echo "::error::SHA256 mismatch! Expected: $EXPECTED_SHA256, Got: $ACTUAL_SHA256"
-            exit 1
-          fi
-          echo "SHA256 verified OK"
-
-          # --- Extract .deb ---
-          PATCH_DIR=$(mktemp -d)
-          dpkg-deb -R ytplus.deb "$PATCH_DIR"
-          DYLIB="$PATCH_DIR/Library/MobileSubstrate/DynamicLibraries/YTLite.dylib"
-
-          if [ ! -f "$DYLIB" ]; then
-            echo "::error::YTLite.dylib not found in extracted .deb"
-            exit 1
-          fi
-
-          # --- Force ptnRegisterBlock internal gates to "authorized" ---
-          # ptnRegisterBlock at 0x1e878 gates all 355 hook registrations.
-          # Keep the function intact (it does retain/release/dispatch) but force
-          # its 3 internal gate checks to always take the "authorized" path.
-
-          # Gate 1: cset w8,eq at 0x1e8c8 → MOV W8, #1 (force "auth flag set")
-          OFFSET1=$((0x1e8c8))
-          echo "=== BEFORE patch (4 bytes at 0x1e8c8 - gate 1: auth check) ==="
-          xxd -s $OFFSET1 -l 4 "$DYLIB"
-          printf '\x28\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET1 conv=notrunc 2>/dev/null
-          echo "=== AFTER patch ==="
-          xxd -s $OFFSET1 -l 4 "$DYLIB"
-          ACTUAL1=$(xxd -s $OFFSET1 -l 4 -p "$DYLIB")
-          if [ "$ACTUAL1" != "28008052" ]; then echo "::error::Gate 1 FAILED!"; exit 1; fi
-          echo "Gate 1 OK: auth check forced to 1"
-
-          # Gate 2: ldrb w8,[x8,#0x4e0] at 0x1e954 → MOV W8, #0
-          # After XOR with 1 this becomes 1 (the "registered" path)
-          OFFSET2=$((0x1e954))
-          echo "=== BEFORE patch (4 bytes at 0x1e954 - gate 2: registration check) ==="
-          xxd -s $OFFSET2 -l 4 "$DYLIB"
-          printf '\x08\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
-          echo "=== AFTER patch ==="
-          xxd -s $OFFSET2 -l 4 "$DYLIB"
-          ACTUAL2=$(xxd -s $OFFSET2 -l 4 -p "$DYLIB")
-          if [ "$ACTUAL2" != "08008052" ]; then echo "::error::Gate 2 FAILED!"; exit 1; fi
-          echo "Gate 2 OK: registration check forced to 0 (XOR 1 → 1 = registered)"
-
-          # Gate 3: cset w8,eq at 0x1e998 → MOV W8, #1 (force "auth flag set")
-          OFFSET3=$((0x1e998))
-          echo "=== BEFORE patch (4 bytes at 0x1e998 - gate 3: second auth check) ==="
-          xxd -s $OFFSET3 -l 4 "$DYLIB"
-          printf '\x28\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET3 conv=notrunc 2>/dev/null
-          echo "=== AFTER patch ==="
-          xxd -s $OFFSET3 -l 4 "$DYLIB"
-          ACTUAL3=$(xxd -s $OFFSET3 -l 4 -p "$DYLIB")
-          if [ "$ACTUAL3" != "28008052" ]; then echo "::error::Gate 3 FAILED!"; exit 1; fi
-          echo "Gate 3 OK: second auth check forced to 1"
-
-          # --- Patch dvnLocked to always return 0 (unlocked) ---
-          OFFSET4=$((0x1eb64))
-          echo "=== BEFORE patch (8 bytes at 0x1eb64 - dvnLocked) ==="
-          xxd -s $OFFSET4 -l 8 "$DYLIB"
-          printf '\x00\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET4 conv=notrunc 2>/dev/null
-          echo "=== AFTER patch ==="
-          xxd -s $OFFSET4 -l 8 "$DYLIB"
-          ACTUAL4=$(xxd -s $OFFSET4 -l 8 -p "$DYLIB")
-          if [ "$ACTUAL4" != "00008052c0035fd6" ]; then echo "::error::dvnLocked FAILED!"; exit 1; fi
-          echo "dvnLocked OK: returns 0 (unlocked)"
-
-          # --- Patch dvnCheck cset to always return 1 (authenticated) ---
-          OFFSET5=$((0x1eb94))
-          echo "=== BEFORE patch (4 bytes at 0x1eb94 - dvnCheck cset) ==="
-          xxd -s $OFFSET5 -l 4 "$DYLIB"
-          printf '\x33\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET5 conv=notrunc 2>/dev/null
-          echo "=== AFTER patch ==="
-          xxd -s $OFFSET5 -l 4 "$DYLIB"
-          ACTUAL5=$(xxd -s $OFFSET5 -l 4 -p "$DYLIB")
-          if [ "$ACTUAL5" != "33008052" ]; then echo "::error::dvnCheck FAILED!"; exit 1; fi
-          echo "dvnCheck OK: always returns 1"
-
-          # --- NOP runtime lock (strb wzr,[x8,#0x4e1] at 0x26ff8) ---
-          OFFSET6=$((0x26ff8))
-          echo "=== BEFORE patch (4 bytes at 0x26ff8 - runtime lock) ==="
-          xxd -s $OFFSET6 -l 4 "$DYLIB"
-          printf '\x1f\x20\x03\xd5' | dd of="$DYLIB" bs=1 seek=$OFFSET6 conv=notrunc 2>/dev/null
-          echo "=== AFTER patch ==="
-          xxd -s $OFFSET6 -l 4 "$DYLIB"
-          ACTUAL6=$(xxd -s $OFFSET6 -l 4 -p "$DYLIB")
-          if [ "$ACTUAL6" != "1f2003d5" ]; then echo "::error::NOP FAILED!"; exit 1; fi
-          echo "NOP OK: runtime lock instruction disabled"
-
-          # --- Redirect lock path to unlock path (0x26ff4 → B 0x274b0) ---
-          OFFSET7=$((0x26ff4))
-          echo "=== BEFORE patch (4 bytes at 0x26ff4 - lock path) ==="
-          xxd -s $OFFSET7 -l 4 "$DYLIB"
-          printf '\x2f\x01\x00\x14' | dd of="$DYLIB" bs=1 seek=$OFFSET7 conv=notrunc 2>/dev/null
-          echo "=== AFTER patch ==="
-          xxd -s $OFFSET7 -l 4 "$DYLIB"
-          ACTUAL7=$(xxd -s $OFFSET7 -l 4 -p "$DYLIB")
-          if [ "$ACTUAL7" != "2f010014" ]; then echo "::error::Lock redirect FAILED!"; exit 1; fi
-          echo "Lock redirect OK: lock path → unlock path"
-
-          # --- Repackage .deb ---
-          dpkg-deb -b "$PATCH_DIR" ytplus.deb
-          rm -rf "$PATCH_DIR"
-          echo "Repackaged ytplus.deb with patched dylib"
+          git clone --quiet --depth=1 https://github.com/LikeSundayLikeRain/YTLite.git _bypass_src
+          cd _bypass_src/Bypass && make clean package DEBUG=0 FINALPACKAGE=1
+          mv packages/*.deb ../../ytlbypass.deb
+          cd ../..
+          rm -rf _bypass_src
+          echo "Built YTLite Bypass tweak"
 
       - name: Clone YouTubeHeader
         if: ${{ inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_ytabc || inputs.enable_demc }}

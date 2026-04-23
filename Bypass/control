@@ -1,0 +1,9 @@
+Package: com.ytlite.bypass
+Name: YTLite Bypass
+Version: 1.0
+Architecture: iphoneos-arm
+Description: Bypasses YTLite v5.2 Patreon gate
+Maintainer: YTLite Fork
+Author: YTLite Fork
+Section: Tweaks
+Depends: mobilesubstrate
