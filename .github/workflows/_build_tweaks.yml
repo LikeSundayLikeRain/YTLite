@@ -114,58 +114,43 @@ jobs:
             exit 1
           fi
 
-          # Patch 1: Set registration byte at file offset 0x11524e0 from 1 to 0.
-          # ptnRegisterBlock reads this byte, XORs with 1, and uses result as switch index.
-          # byte=1 (default) → XOR 1 → 0 → skips hook registration
-          # byte=0 (patched) → XOR 1 → 1 → creates block and registers hooks
-          OFFSET1=$((0x11524e0))
-          echo "=== BEFORE (registration byte at 0x11524e0) ==="
-          xxd -s $OFFSET1 -l 1 "$DYLIB"
-          printf '\x00' | dd of="$DYLIB" bs=1 seek=$OFFSET1 conv=notrunc 2>/dev/null
-          echo "=== AFTER ==="
-          xxd -s $OFFSET1 -l 1 "$DYLIB"
-          ACTUAL1=$(xxd -s $OFFSET1 -l 1 -p "$DYLIB")
-          if [ "$ACTUAL1" != "00" ]; then echo "::error::Registration byte patch FAILED!"; exit 1; fi
-          echo "Registration byte OK: 1 → 0 (hooks will register)"
-
-          # Patch 2: NOP the runtime lock at 0x26ff8.
+          # Patch 1: NOP the runtime lock at 0x26ff8.
           # strb wzr, [x8, #0x4e1] sets the lock byte to 0 when Patreon fails.
           # byte=1 is the unlocked state (inline XOR: 1^1=0 → does work).
           # byte=0 is locked (inline XOR: 0^1=1 → skips).
           # NOP this so the byte stays at 1 (unlocked) permanently.
-          OFFSET2=$((0x26ff8))
+          OFFSET1=$((0x26ff8))
           echo "=== BEFORE (runtime lock at 0x26ff8) ==="
-          xxd -s $OFFSET2 -l 4 "$DYLIB"
-          printf '\x1f\x20\x03\xd5' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
+          xxd -s $OFFSET1 -l 4 "$DYLIB"
+          printf '\x1f\x20\x03\xd5' | dd of="$DYLIB" bs=1 seek=$OFFSET1 conv=notrunc 2>/dev/null
           echo "=== AFTER ==="
-          xxd -s $OFFSET2 -l 4 "$DYLIB"
-          ACTUAL2=$(xxd -s $OFFSET2 -l 4 -p "$DYLIB")
-          if [ "$ACTUAL2" != "1f2003d5" ]; then echo "::error::NOP patch FAILED!"; exit 1; fi
+          xxd -s $OFFSET1 -l 4 "$DYLIB"
+          ACTUAL1=$(xxd -s $OFFSET1 -l 4 -p "$DYLIB")
+          if [ "$ACTUAL1" != "1f2003d5" ]; then echo "::error::NOP patch FAILED!"; exit 1; fi
           echo "NOP OK: runtime lock disabled, byte stays 1 (unlocked)"
 
-          # Patch 3: dvnLocked at 0x1eb64 → MOV W0, #0 + RET (always unlocked)
-          OFFSET3=$((0x1eb64))
+          # Patch 2: dvnLocked at 0x1eb64 → MOV W0, #0 + RET (always unlocked)
+          OFFSET2=$((0x1eb64))
           echo "=== BEFORE (dvnLocked at 0x1eb64) ==="
-          xxd -s $OFFSET3 -l 8 "$DYLIB"
-          printf '\x00\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET3 conv=notrunc 2>/dev/null
+          xxd -s $OFFSET2 -l 8 "$DYLIB"
+          printf '\x00\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
           echo "=== AFTER ==="
-          xxd -s $OFFSET3 -l 8 "$DYLIB"
-          ACTUAL3=$(xxd -s $OFFSET3 -l 8 -p "$DYLIB")
-          if [ "$ACTUAL3" != "00008052c0035fd6" ]; then echo "::error::dvnLocked patch FAILED!"; exit 1; fi
+          xxd -s $OFFSET2 -l 8 "$DYLIB"
+          ACTUAL2=$(xxd -s $OFFSET2 -l 8 -p "$DYLIB")
+          if [ "$ACTUAL2" != "00008052c0035fd6" ]; then echo "::error::dvnLocked patch FAILED!"; exit 1; fi
           echo "dvnLocked OK: returns 0 (unlocked)"
 
-          # Patch 4: dvnCheck cset at 0x1eb94 → MOV W19, #1 (always authenticated)
+          # Patch 3: dvnCheck cset at 0x1eb94 → MOV W19, #1 (always authenticated)
           # dvnCheck's auth call (bl 0x2cc54) still runs for side effects,
           # but we force the return to YES. User sees "logged in" in Patreon settings.
-          # Without this, features may be gated by dvnCheck's return value.
-          OFFSET4=$((0x1eb94))
+          OFFSET3=$((0x1eb94))
           echo "=== BEFORE (dvnCheck cset at 0x1eb94) ==="
-          xxd -s $OFFSET4 -l 4 "$DYLIB"
-          printf '\x33\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET4 conv=notrunc 2>/dev/null
+          xxd -s $OFFSET3 -l 4 "$DYLIB"
+          printf '\x33\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET3 conv=notrunc 2>/dev/null
           echo "=== AFTER ==="
-          xxd -s $OFFSET4 -l 4 "$DYLIB"
-          ACTUAL4=$(xxd -s $OFFSET4 -l 4 -p "$DYLIB")
-          if [ "$ACTUAL4" != "33008052" ]; then echo "::error::dvnCheck patch FAILED!"; exit 1; fi
+          xxd -s $OFFSET3 -l 4 "$DYLIB"
+          ACTUAL3=$(xxd -s $OFFSET3 -l 4 -p "$DYLIB")
+          if [ "$ACTUAL3" != "33008052" ]; then echo "::error::dvnCheck patch FAILED!"; exit 1; fi
           echo "dvnCheck OK: always returns 1 (authenticated)"
 
           dpkg-deb -b "$PATCH_DIR" ytplus.deb
