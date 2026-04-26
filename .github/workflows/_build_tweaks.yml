@@ -101,15 +101,47 @@ jobs:
             exit 1
           fi
 
-      - name: Build YTLite Bypass tweak
+      - name: Patch YTLite dylib (bypass Patreon gate)
         if: ${{ inputs.tweak_version != '' || inputs.tweak_url != '' }}
         run: |
-          git clone --quiet --depth=1 https://github.com/LikeSundayLikeRain/YTLite.git _bypass_src
-          cd _bypass_src/Bypass && make clean package DEBUG=0 FINALPACKAGE=1
-          mv packages/*.deb ../../ytlbypass.deb
-          cd ../..
-          rm -rf _bypass_src
-          echo "Built YTLite Bypass tweak"
+          set -euo pipefail
+          PATCH_DIR=$(mktemp -d)
+          dpkg-deb -R ytplus.deb "$PATCH_DIR"
+          DYLIB="$PATCH_DIR/Library/MobileSubstrate/DynamicLibraries/YTLite.dylib"
+
+          if [ ! -f "$DYLIB" ]; then
+            echo "::error::YTLite.dylib not found in extracted .deb"
+            exit 1
+          fi
+
+          # Patch 1: Set registration byte at file offset 0x11524e0 from 1 to 0.
+          # ptnRegisterBlock reads this byte, XORs with 1, and uses result as switch index.
+          # byte=1 (default) → XOR 1 → 0 → skips hook registration
+          # byte=0 (patched) → XOR 1 → 1 → creates block and registers hooks
+          OFFSET1=$((0x11524e0))
+          echo "=== BEFORE (registration byte at 0x11524e0) ==="
+          xxd -s $OFFSET1 -l 1 "$DYLIB"
+          printf '\x00' | dd of="$DYLIB" bs=1 seek=$OFFSET1 conv=notrunc 2>/dev/null
+          echo "=== AFTER ==="
+          xxd -s $OFFSET1 -l 1 "$DYLIB"
+          ACTUAL1=$(xxd -s $OFFSET1 -l 1 -p "$DYLIB")
+          if [ "$ACTUAL1" != "00" ]; then echo "::error::Registration byte patch FAILED!"; exit 1; fi
+          echo "Registration byte OK: 1 → 0 (hooks will register)"
+
+          # Patch 2: dvnLocked at 0x1eb64 → MOV W0, #0 + RET (always unlocked)
+          OFFSET2=$((0x1eb64))
+          echo "=== BEFORE (dvnLocked at 0x1eb64) ==="
+          xxd -s $OFFSET2 -l 8 "$DYLIB"
+          printf '\x00\x00\x80\x52\xc0\x03\x5f\xd6' | dd of="$DYLIB" bs=1 seek=$OFFSET2 conv=notrunc 2>/dev/null
+          echo "=== AFTER ==="
+          xxd -s $OFFSET2 -l 8 "$DYLIB"
+          ACTUAL2=$(xxd -s $OFFSET2 -l 8 -p "$DYLIB")
+          if [ "$ACTUAL2" != "00008052c0035fd6" ]; then echo "::error::dvnLocked patch FAILED!"; exit 1; fi
+          echo "dvnLocked OK: returns 0 (unlocked)"
+
+          dpkg-deb -b "$PATCH_DIR" ytplus.deb
+          rm -rf "$PATCH_DIR"
+          echo "Patched and repackaged ytplus.deb"
 
       - name: Clone YouTubeHeader
         if: ${{ inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_ytabc || inputs.enable_demc }}
