@@ -154,6 +154,20 @@ jobs:
           if [ "$ACTUAL3" != "00008052c0035fd6" ]; then echo "::error::dvnLocked patch FAILED!"; exit 1; fi
           echo "dvnLocked OK: returns 0 (unlocked)"
 
+          # Patch 4: dvnCheck cset at 0x1eb94 → MOV W19, #1 (always authenticated)
+          # dvnCheck's auth call (bl 0x2cc54) still runs for side effects,
+          # but we force the return to YES. User sees "logged in" in Patreon settings.
+          # Without this, features may be gated by dvnCheck's return value.
+          OFFSET4=$((0x1eb94))
+          echo "=== BEFORE (dvnCheck cset at 0x1eb94) ==="
+          xxd -s $OFFSET4 -l 4 "$DYLIB"
+          printf '\x33\x00\x80\x52' | dd of="$DYLIB" bs=1 seek=$OFFSET4 conv=notrunc 2>/dev/null
+          echo "=== AFTER ==="
+          xxd -s $OFFSET4 -l 4 "$DYLIB"
+          ACTUAL4=$(xxd -s $OFFSET4 -l 4 -p "$DYLIB")
+          if [ "$ACTUAL4" != "33008052" ]; then echo "::error::dvnCheck patch FAILED!"; exit 1; fi
+          echo "dvnCheck OK: always returns 1 (authenticated)"
+
           dpkg-deb -b "$PATCH_DIR" ytplus.deb
           rm -rf "$PATCH_DIR"
           echo "Patched and repackaged ytplus.deb"
