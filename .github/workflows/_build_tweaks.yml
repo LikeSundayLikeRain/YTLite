@@ -102,7 +102,7 @@ jobs:
           fi
 
       - name: Patch YTLite dylib (bypass Patreon gate)
-        if: ${{ inputs.tweak_version != '' || inputs.tweak_url != '' }}
+        if: ${{ inputs.tweak_version == '5.2' }}
         run: |
           set -euo pipefail
           PATCH_DIR=$(mktemp -d)
