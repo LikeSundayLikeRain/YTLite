@@ -46,9 +46,15 @@ on:
         type: string
 
       tweak_version:
-        description: "The version of the tweak to use. Enter the version manually from dayanch96/YTLite/releases or leave default"
+        description: "The version of the tweak to use. Enter the version manually from dayanch96/YTLite/releases or leave empty if using tweak_url"
         default: "5.2"
-        required: true
+        required: false
+        type: string
+
+      tweak_url:
+        description: "Direct URL to a custom .deb file (overrides tweak_version if provided)"
+        default: ""
+        required: false
         type: string
 
       display_name:
@@ -84,6 +90,7 @@ jobs:
       enable_ytabc: ${{ inputs.enable_ytabc }}
       enable_demc: ${{ inputs.enable_demc }}
       tweak_version: ${{ inputs.tweak_version }}
+      tweak_url: ${{ inputs.tweak_url }}
 
   package:
     name: Package IPA
